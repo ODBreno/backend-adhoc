@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import { GetAllDeputadosUseCase } from './GetAllDeputadosUseCase';
 
-export class GetDeputadosController {
+export class GetAllDeputadosController {
     async handle(req: Request, res: Response){
         const getDeputadosUseCase = new GetAllDeputadosUseCase();
-        const result = await getDeputadosUseCase.execute({});
+        const result = await getDeputadosUseCase.execute();
 
-        return res.status(201).json(result);
+        return res.status(200).json(result);
     }
 }
