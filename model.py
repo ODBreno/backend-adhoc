@@ -10,15 +10,16 @@ from sqlalchemy.orm import class_mapper
 
 class AcessDB:
     @staticmethod
-    def consulta(select, join, where, operators, values, condition, order_by, func_agregada):
+    def consulta(select, join, where, operators, values, condition, order_by, func_agregada, sort_by):
         session = DAO.getSession()
         # Build the base query
         query = session.query()
         tables = []
 
         # Add tables to the query
-        for table in join:
-            tables.append(globals()[''.join(word.capitalize() for word in table.split('_'))])  # Assuming table names match class names
+        if join:
+            for table in join:
+                tables.append(globals()[''.join(word.capitalize() for word in table.split('_'))])  # Assuming table names match class names
 
         query = query.select_from(tables[0])
 
@@ -31,35 +32,46 @@ class AcessDB:
         for table, cols in select.items():
             table_obj = globals()[table.capitalize()]  # Assuming table names match class names
             for col in cols:
-                query = query.add_column(getattr(table_obj, col))
+                if len(join) > 1:
+                    query = query.add_column(getattr(table_obj, col).label(str(table) + '_' + str(col)))
+                else:
+                    query = query.add_column(getattr(table_obj, col))
 
-       # Add conditions to the query
+        # Add conditions to the query
         conditions = []
-        for table, cols in where.items():
-            table_obj = globals()[table.capitalize()]  # Assuming table names match class names
-            for i, col in enumerate(cols):
-                if values[col] is not None:
-                    if operators[table][i] == ">":
-                        # Utilize a função build_where_condition aqui
-                        conditions.append(AcessDB.build_where_condition(table_obj, [col], [operators[table][i]], [values[col]]))
+        if where:
+            for table, cols in where.items():
+                table_obj = globals()[table.capitalize()]  # Assuming table names match class names
+                for i, col in enumerate(cols):
+                    if values[table][i] is not None:
+                        if operators[table][i] is not None:
+                            conditions = AcessDB.build_where_condition(table_obj, [col], [operators[table][i]], [values[table][i]])
 
-        if conditions:
-            if condition == "OR":
-                query = query.filter(or_(*conditions))
-            elif condition == "AND":
-                query = query.filter(and_(*conditions))
-
+                        if condition == "OR":
+                            query = query.filter(or_(*conditions))
+                        elif condition == "AND":
+                            query = query.filter(and_(*conditions))
+                        else:
+                            query = query.filter(*conditions)
+            
         # Add order by to the query
-        for table, order in order_by.items():
-            table_obj = globals()[table.capitalize()]  # Assuming table names match class names
-            query = query.order_by(getattr(table_obj, order[0]).asc() if order[1] == "asc" else getattr(table_obj, order[0]).desc())
+        if order_by:
+            for table, order in order_by.items():
+                table_obj = globals()[table.capitalize()]  # Assuming table names match class names
+                query = query.order_by(getattr(table_obj, order[0]).asc() if order[1] == "asc" else getattr(table_obj, order[0]).desc())
+        
+        # Funções Agregadas
+        if func_agregada:
+            for table, funcs in func_agregada.items():
+                table_obj = globals()[table.capitalize()]  # Assuming table names match class names
+                # Adicione a função agregada ao resultado
+                if funcs[1] == "count":
+                    query = query.add_column(func.count(getattr(table_obj, funcs[0])).label("count_" + funcs[0]))
 
-        # Add aggregate functions to the query
-        for table, funcs in func_agregada.items():
-            table_obj = globals()[table.capitalize()]  # Assuming table names match class names
-            for func in funcs:
-                if func[2] == "true":
-                    query = query.add_column(func[1](getattr(table_obj, func[0])))
+        # Adicione a cláusula GROUP BY para funções de agregação
+        if sort_by:
+            group_by_column = getattr(tables[0], sort_by)
+            query = query.group_by(group_by_column)
 
         return query.all()
     
@@ -99,10 +111,24 @@ class AcessDB:
 
         for i, col in enumerate(columns):
             if values[i] is not None:
-                if operators[i] == ">":
-                    conditions.append(getattr(table, col) > values[i][0])
+                if operators[i] == "=":
+                    conditions.append(getattr(table, col) == values[i])
+                elif operators[i] == ">":
+                    conditions.append(getattr(table, col) > values[i])
+                elif operators[i] == ">":
+                    conditions.append(getattr(table, col) > values[i])
+                elif operators[i] == "<":
+                    conditions.append(getattr(table, col) < values[i])
+                elif operators[i] == ">=":
+                    conditions.append(getattr(table, col) >= values[i])
+                elif operators[i] == "<=":
+                    conditions.append(getattr(table, col) <= values[i])
+                elif operators[i].lower() == "ilike":
+                    conditions.append(func.lower(getattr(table, col)).ilike(f"%{values[i].lower()}%"))
+                elif operators[i].lower() == "like":
+                    conditions.append(getattr(table, col).like(f"%{values[i]}%"))
 
-        return or_(*conditions) if conditions else None
+        return conditions if conditions else None
 
 
 class API:
@@ -119,14 +145,15 @@ class API:
     def get_consulta(self):
         body = request.get_json()
         resultados = self.db.consulta(
-            body.get("select", {}),
-            body.get("join", []),
-            body.get("where", {}),
-            body.get("operators", {}),
-            body.get("values", {}),
-            body.get("condition", "AND"),
-            body.get("order_by", {}),
-            body.get("func_agregada", {})
+            body.get("select"),
+            body.get("join"),
+            body.get("where"),
+            body.get("operators"),
+            body.get("values"),
+            body.get("condition"),
+            body.get("order_by"),
+            body.get("func_agregada"),
+            body.get("sort_by")
         )
 
         result_dicts = [row._asdict() for row in resultados]
