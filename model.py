@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy import and_, or_
+import sqlalchemy
 from DAO import *
 from mapeamento import *
 from flask_cors import CORS
@@ -10,7 +9,7 @@ from sqlalchemy.orm import class_mapper
 
 class AcessDB:
     @staticmethod
-    def consulta(select, join, where, operators, values, condition, order_by, func_agregada, sort_by):
+    def consulta(select, join, where, operators, values, condition, order_by, func_agregada, group_by):
         session = DAO.getSession()
         # Build the base query
         query = session.query()
@@ -65,12 +64,17 @@ class AcessDB:
             for table, funcs in func_agregada.items():
                 table_obj = globals()[table.capitalize()]  # Assuming table names match class names
                 # Adicione a função agregada ao resultado
-                if funcs[1] == "count":
-                    query = query.add_column(func.count(getattr(table_obj, funcs[0])).label("count_" + funcs[0]))
+                if funcs[1] == "COUNT":
+                    query = query.add_column(func.count(getattr(table_obj, funcs[0])).label("count_" + funcs[0] + "_" + table))
+                elif funcs[1] == "AVG":
+                    column = getattr(table_obj, funcs[0])
+                    if not isinstance(column.type, (sqlalchemy.Integer, sqlalchemy.Float)):
+                        raise ValueError(f"Coluna {funcs[0]} da tabela {table} deve ser de algum tipo numérico para calcular a média!")
+                    query = query.add_column(func.mode(getattr(table_obj, funcs[0])).label("avg_" + funcs[0] + "_" + table))
 
         # Adicione a cláusula GROUP BY para funções de agregação
-        if sort_by:
-            group_by_column = getattr(tables[0], sort_by)
+        if group_by:
+            group_by_column = getattr(tables[0], next(iter(select.items()))[1][0])
             query = query.group_by(group_by_column)
 
         return query.all()
@@ -153,7 +157,7 @@ class API:
             body.get("condition"),
             body.get("order_by"),
             body.get("func_agregada"),
-            body.get("sort_by")
+            body.get("group_by")
         )
 
         result_dicts = [row._asdict() for row in resultados]
