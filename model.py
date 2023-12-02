@@ -66,11 +66,21 @@ class AcessDB:
                 # Adicione a função agregada ao resultado
                 if funcs[1] == "COUNT":
                     query = query.add_column(func.count(getattr(table_obj, funcs[0])).label("count_" + funcs[0] + "_" + table))
-                elif funcs[1] == "AVG":
+                elif funcs[1] == "SUM":
                     column = getattr(table_obj, funcs[0])
                     if not isinstance(column.type, (sqlalchemy.Integer, sqlalchemy.Float)):
                         raise ValueError(f"Coluna {funcs[0]} da tabela {table} deve ser de algum tipo numérico para calcular a média!")
-                    query = query.add_column(func.mode(getattr(table_obj, funcs[0])).label("avg_" + funcs[0] + "_" + table))
+                    query = query.add_column(func.cast(func.sum(column), Numeric(12, 2)).label("sum_" + funcs[0] + "_" + table))
+                elif funcs[1] == "MIN":
+                    column = getattr(table_obj, funcs[0])
+                    if not isinstance(column.type, (sqlalchemy.Integer, sqlalchemy.Float)):
+                        raise ValueError(f"Coluna {funcs[0]} da tabela {table} deve ser de algum tipo numérico para calcular o mínimo!")
+                    query = query.add_column(func.min(column).label("min_" + funcs[0] + "_" + table))
+                elif funcs[1] == "MAX":
+                    column = getattr(table_obj, funcs[0])
+                    if not isinstance(column.type, (sqlalchemy.Integer, sqlalchemy.Float)):
+                        raise ValueError(f"Coluna {funcs[0]} da tabela {table} deve ser de algum tipo numérico para calcular o máximo!")
+                    query = query.add_column(func.max(column).label("max_" + funcs[0] + "_" + table))
 
         # Adicione a cláusula GROUP BY para funções de agregação
         if group_by:
