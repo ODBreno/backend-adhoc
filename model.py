@@ -44,14 +44,14 @@ class AcessDB:
                 for i, col in enumerate(cols):
                     if values[table][i] is not None:
                         if operators[table][i] is not None:
-                            conditions = AcessDB.build_where_condition(table_obj, [col], [operators[table][i]], [values[table][i]])
+                            conditions.append(*AcessDB.build_where_condition(table_obj, [col], [operators[table][i]], [values[table][i]]))
 
-                        if condition == "OR":
-                            query = query.filter(or_(*conditions))
-                        elif condition == "AND":
-                            query = query.filter(and_(*conditions))
-                        else:
-                            query = query.filter(*conditions)
+            if condition == "OR":
+                query = query.filter(or_(*conditions))
+            elif condition == "AND":
+                query = query.filter(and_(*conditions))
+            else:
+                query = query.filter(*conditions)
             
         # Add order by to the query
         if order_by:
