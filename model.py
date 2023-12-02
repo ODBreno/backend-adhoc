@@ -57,7 +57,7 @@ class AcessDB:
         if order_by:
             for table, order in order_by.items():
                 table_obj = globals()[table.capitalize()]  # Assuming table names match class names
-                query = query.order_by(getattr(table_obj, order[0]).asc() if order[1] == "asc" else getattr(table_obj, order[0]).desc())
+                query = query.order_by(getattr(table_obj, order[0]).asc() if order[1] == "ASC" else getattr(table_obj, order[0]).desc())
         
         # Funções Agregadas
         if func_agregada:
